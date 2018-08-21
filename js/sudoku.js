@@ -57,8 +57,41 @@
     }
 
     setVal(index, value, type) {
+      let res;
       this.sud[index].setVal(value, type);
       this.unset--;
+      res = this.eliminateCandidatesAll();
+      if(res == 0 ){
+        this.mustCandidates();
+      }
+      return(res);
+    }
+
+    unsetVal(index) {
+      let i;
+      if(this.sud[index].val > 0) {
+        this.sud[index] = new SudokuCell();
+        this.unset++;
+      }
+      for(i=0; i<81; i++) {
+        if(this.sud[i].val == 0){
+          this.sud[i] = new SudokuCell();
+        }
+      }
+      this.eliminateCandidatesAll();
+      this.mustCandidates();
+      this.eliminateNullifyingCandidates(0);
+    }
+
+    validateCell(index, val) {
+      let colSet = this.getColSet(index);
+      let rowSet = this.getRowSet(index);
+      let regSet = this.getRegionSet(index);
+
+      if(colSet.has(val) || rowSet.has(val) || regSet.has(val)){
+        return false;
+      }
+      return true;
     }
 
     getIndex(row, col) {
@@ -170,26 +203,32 @@
       return(this.sud[index].cand.size)
     }
 
-    fillSolved(){
+/*     fillSolved(){
       let i;
       let changed = false;
       for(i=0; i < 81; i++) {
         if(this.sud[i].cand.size == 1) {  //Only one candidate left.. we solved this cell
           this.setVal(i, [...this.sud[i].cand][0], "SOLVED");
           changed = true;
+          i=0;
         }
       }
       return(changed);
-    }
+    } */
     
-    oneStep(){
-      
-      let retval = this.eliminateCandidatesAll();
-      if(retval == -1) {
-        return(retval);
+    fillOne(){
+      let i;
+      let changed = -1;
+      for(i=0; i < 81; i++) {
+        if(this.sud[i].cand.size == 1) {  //Only one candidate left.. we solved this cell
+          if(this.setVal(i, [...this.sud[i].cand][0], "SOLVED") == -1){
+            console.log("There is a problem with index " + i + "invalid single candidate");
+            return(-2)
+          }
+          return(i);
+        }
       }
-      return(this.fillSolved());
-
+      return(changed);
     }
 
     eliminateNullifyingCandidates(level) {
@@ -205,17 +244,12 @@
         for(j = 0; j < candArr.length; j++) {
 
           tmpSud = this.makeCopy();
-          tmpSud.setVal(i, candArr[j], "GUESSED");
-          console.log("Level: " + level + ": guessing for cell: ", i, "candidate: ", candArr[j]);
-          res = tmpSud.solve(level+1);
+          res = tmpSud.setVal(i, candArr[j], "GUESSED");
+ //         console.log("Level: " + level + ": guessing for cell: ", i, "candidate: ", candArr[j]);
           if(res === -1) {
             toBeEliminated.push(candArr[j]);
             changed = true;
-            console.log("Level " + level + ": this will be eliminated.. it invalidates sudoku");
-          }
-          if(res === true) {
-            console.log("Level " + level + ": this candidate solves the sudoku");
-            return(tmpSud);
+ //           console.log("Level " + level + ": Cell " + i + "Candidate " + candArr[j] + " will be eliminated.. it invalidates sudoku");
           }
         }
         toBeEliminated.forEach(x => this.sud[i].cand.delete(x));
@@ -223,33 +257,142 @@
       return(changed);
     } 
 
+    mustCandidates() {
+      //this function eliminiates the other candidates of a cell if one of the candidates is the only option for
+      //a row/col/region
+      let founds;
+      let possib;
+      let i,j,k;
+      let changed = false;
+      //First do it for cols
+      for(i=0; i<9; i++) { //for each col
+        founds = new Set();
+        possib = new Set([1,2,3,4,5,6,7,8,9]);
+        for(j=i; j<81; j += 9){
+          founds.add(this.sud[j].val);
+        }
+        founds.delete(0);  // if it is added just remove it
+        founds.forEach(x => possib.delete(x));
+        possib.forEach(x => {
+          let count = 0;
+          let pos;
+          for(j=i; j<81; j+=9){
+            if(this.sud[j].cand.has(x)) { count++; pos=j; }
+          }
+          if(count == 0) {
+            console.log("mustCandidates: there is a problem with sudoku... no cell can have a must value for column");
+          }
+          if(count == 1) {
+            this.sud[pos].cand = new Set([x]);
+            changed=true;
+          }
+        })
+      }
+
+      //Now do it for rows
+      for(i=0; i<81; i+=9){  //for each row
+        founds = new Set();
+        possib = new Set([1,2,3,4,5,6,7,8,9]);
+        for(j=i; j<i+9; j++){
+          founds.add(this.sud[j].val);
+        }
+        founds.delete(0);
+        founds.forEach(x => possib.delete(x));
+        possib.forEach(x => {
+          let count = 0;
+          let pos;
+          for(j=i; j<i+9; j++){
+            if(this.sud[j].cand.has(x)) { count++; pos=j; }
+          }
+          if(count == 0) {
+            console.log("mustCandidates: there is a problem with sudoku... no cell can have a must value for row");
+          }
+          if(count == 1) {
+            this.sud[pos].cand = new Set([x]);
+            changed=true;
+          }
+        })
+      }
+
+      //Now do it for regions
+      let regCorners = [0, 3, 6, 27, 30, 33, 54, 57, 60];
+      let ind;
+
+      for(k = 0; k < regCorners.length; k++) { //for each region
+        founds = new Set();
+        possib = new Set([1,2,3,4,5,6,7,8,9]);
+        for(i=0; i<3; i++) {
+          for(j=0; j<3; j++){
+            ind = regCorners[k] + i + j*9;
+            founds.add(this.sud[ind].val);
+          }
+        }
+        founds.delete(0);
+        founds.forEach(x => possib.delete(x));
+        possib.forEach(x => {
+          let count = 0;
+          let pos;
+          for(i=0; i<3; i++) {
+            for(j=0; j<3; j++){
+              ind = regCorners[k] + i + j*9;
+              if(this.sud[ind].cand.has(x)) {count++; pos=ind;}
+            }
+          }
+          if(count == 0) {
+            console.log("mustCandidates: there is a problem with sudoku... no cell can have a must value for region");
+          }
+          if(count == 1) {
+            this.sud[pos].cand = new Set([x]);
+            changed=true;
+          }
+        })
+      }
+      return(changed);
+    }
+
+  
+
+
+
     solve(level) {
+
+      let i,j;
       let changed;
+      let tmpSud;
+      let candArr;
+      let res;
+      let maxLevel=3;
+
+      if(level > maxLevel) return(false);
 
       while(this.unset > 0) {
-        changed = this.oneStep();
-        if(changed == -1) {
-          return(-1) //invalid sudoku
+        changed = this.fillOne();
+        if(changed > -1) { continue }  // There are no cells with one candidate.. we have to search
+        if(changed == -2) {// This means there is a problem and we can't solve this sudoku
+          return(false);
         }
-        if(changed) { continue }  // there are some solved cells. We have to continue with the oneStep again
-
         // If we are here, this means nothing changed in one pass (no cells solved). 
         // We have to eliminate the nullifying candidates
-
+        
         changed = this.eliminateNullifyingCandidates(level);
-        if(typeof(changed) === "object") {
-          console.log("Level " + level + ":  ************************************Solved in recursive call");
-          this.sud = changed.sud;
-          this.unset = changed.unset;
-          return(true);
-        }
         if(changed === true) { continue }  // we managed to eliminate some candidates. We can continue with oneStep
 
-        // If we are here, we can't solve without guessing some candidates with more than one depth (is it possible?)
-
-        console.log("Couldn't solve this sudoku.. sorry");
-        return(false);
-        
+        // If we are here, we can't solve without guessing some candidates with more than one depth
+        for(i = 0; i<81; i++) {
+          if(this.sud[i].val >0) {continue}
+          candArr = [...this.sud[i].cand];
+          for(j = 0; j<candArr.length; j++) {
+            tmpSud = this.makeCopy();
+            tmpSud.setVal(i, candArr[j], "GUESSED");  // all candidates that would return a -1 should have been eliminated
+            res = tmpSud.solve(level+1);
+            if(res === true) {
+              this.sud = tmpSud.sud;
+              this.unset = tmpSud.unset;
+              return(true);
+            }
+          }
+        }
+        return(false);        
       }
       return(true);
     }
