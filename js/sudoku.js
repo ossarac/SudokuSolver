@@ -360,8 +360,8 @@
       let changed;
       let tmpSud;
       let candArr;
-      let res;
-      let maxLevel=3;
+      let res;  
+      let maxLevel=10;
 
       if(level > maxLevel) return(false);
 

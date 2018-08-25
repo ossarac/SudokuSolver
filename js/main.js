@@ -69,13 +69,17 @@ function colorizeCells() {
 
     for(i = 0; i<81; i++){
         id = "cell-" + i;
-        if (mySudoku.sud[i].cand.size == 1) {
+        if (mySudoku.sud[i].cand.size === 1) {
             myObj = document.getElementById(id);
             myObj.classList.add("oneCand");
             myObj.classList.remove("twoCand");   
-        } else if (mySudoku.sud[i].cand.size == 2) {
+        } else if (mySudoku.sud[i].cand.size === 2) {
             document.getElementById(id).classList.add("twoCand");
+        } else if (mySudoku.sud[i].cand.size > 2) {
+            document.getElementById(id).classList.remove("oneCand");
+            document.getElementById(id).classList.remove("twoCand");
         }
+
     }
 }
 
